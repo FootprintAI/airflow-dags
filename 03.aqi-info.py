@@ -65,7 +65,7 @@ def _list_geo_devices():
     # device_id2loc_dict is keyed by $device id with device's geo location data
     device_id2loc_dict = {}
 
-    base_url = 'https://wot.epa.gov.tw/Layer/get_json'
+    base_url = 'https://wot.moenv.gov.tw/Layer/get_json'
 
     query_iot = { 'url': 'http://10.0.100.184/api/v1/device/iot?fields=lon,lat,desc,name&display=true' }
     query_nat = { 'url': 'http://10.0.100.184/api/v1/device/national_hr?fields=lon,lat,desc,name' }
@@ -97,7 +97,7 @@ def _get_device_datapoint(device_id: str, start_time:datetime, end_time:datetime
     # device_datapoint is keyed by time, contain the last data from the device
     device_datapoint = {}
 
-    base_url = 'https://wot.epa.gov.tw/Layer/get_json'
+    base_url = 'https://wot.moenv.gov.tw/Layer/get_json'
     #query_type = 'pm2_5,pm10,co,voc'
     # we only query pm2.5
     query_type = 'pm2_5'
