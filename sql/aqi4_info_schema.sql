@@ -1,0 +1,14 @@
+CREATE TABLE IF NOT EXISTS aqi4_info (
+    device_id TEXT PRIMARY KEY,
+    time TIMESTAMP,
+    longitude DOUBLE PRECISION,
+    latitude DOUBLE PRECISION,
+    aqi INTEGER,
+    pm2_5 DOUBLE PRECISION,
+    pm10 DOUBLE PRECISION,
+    o3 DOUBLE PRECISION,
+    co DOUBLE PRECISION,
+    so2 DOUBLE PRECISION,
+    no2 DOUBLE PRECISION
+);
+CREATE INDEX IF NOT EXISTS aqi4_info_time_index ON aqi4_info USING btree (time);
