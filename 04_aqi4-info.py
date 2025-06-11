@@ -1,48 +1,102 @@
 import os
+import sys
+sys.path.insert(0,os.path.abspath(os.path.dirname(__file__)))
+
+import json
 import requests
+
 from datetime import datetime, timedelta
 from airflow import DAG
-from airflow.operators.python import PythonOperator
 from airflow.models.param import Param
+from airflow.models import Variable
+from airflow.operators.python import PythonOperator
 from airflow.utils.dates import days_ago
 from dags.factory import DagFactory
-from dags.postgres import PostgresOp
+from operators.postgres import PostgresOp
+from lib.requests import debug_requests
 
 # ✅ 新的 DAG ID，避免與 03.py 重複
 DAG_ID = "get_moenv_aqi_info_v2"
 
 # ✅ 抓取資料邏輯
 def get_moenv_aqi_info_op(shard_id: int = 0, total_shard: int = 1):
-    url = "https://data.moenv.gov.tw/api/v2/aqx_p_432"
-    params = {
-        "api_key": "2df2de9e-db13-4ea8-956a-0d25de5200de",
-        "format": "json",
-        "limit": 1000
-    }
-
-    res = requests.get(url, params=params, verify=False)
-    data = res.json().get("records", [])
-
-    target_sites = ["基隆", "林口", "嘉義", "安南"]
     records = []
-    for i, d in enumerate(data):
-        if d.get("sitename") not in target_sites:
-            continue
-        if int(i % total_shard) != int(shard_id):
-            continue
-        records.append({
-            "device_id": d.get("sitename"),
-            "time": d.get("publishtime"),
-            "longitude": float(d.get("longitude", 0)),
-            "latitude": float(d.get("latitude", 0)),
-            "aqi": int(d.get("aqi", -1)) if d.get("aqi") and d.get("aqi").isdigit() else None,
-            "pm2_5": float(d.get("pm2.5")) if d.get("pm2.5") and d.get("pm2.5").replace('.', '', 1).isdigit() else None,
-            "pm10": float(d.get("pm10")) if d.get("pm10") and d.get("pm10").replace('.', '', 1).isdigit() else None,
-            "o3": float(d.get("o3")) if d.get("o3") and d.get("o3").replace('.', '', 1).isdigit() else None,
-            "co": float(d.get("co")) if d.get("co") and d.get("co").replace('.', '', 1).isdigit() else None,
-            "so2": float(d.get("so2")) if d.get("so2") and d.get("so2").replace('.', '', 1).isdigit() else None,
-            "no2": float(d.get("no2")) if d.get("no2") and d.get("no2").replace('.', '', 1).isdigit() else None
-        })
+
+    # --- 台灣資料（moenv） ---
+    try:
+        url = "https://data.moenv.gov.tw/api/v2/aqx_p_432"
+        params = {
+            "api_key": "2df2de9e-db13-4ea8-956a-0d25de5200de",
+            "format": "json",
+            "limit": 1000
+        }
+
+        res = requests.get(url, params=params, verify=False)
+        data = res.json().get("records", [])
+
+        target_sites = ["基隆", "林口", "嘉義", "安南"]
+        for i, d in enumerate(data):
+            if d.get("sitename") not in target_sites:
+                continue
+            if int(i % total_shard) != int(shard_id):
+                continue
+            records.append({
+                "device_id": str(d.get("sitename")),
+                "time": str(d.get("publishtime")),
+                "longitude": str(d.get("longitude", "")),
+                "latitude": str(d.get("latitude", "")),
+                "aqi": str(d.get("aqi", "")),
+                "pm2_5": str(d.get("pm2.5", "")),
+                "pm10": str(d.get("pm10", "")),
+                "o3": str(d.get("o3", "")),
+                "co": str(d.get("co", "")),
+                "so2": str(d.get("so2", "")),
+                "no2": str(d.get("no2", ""))
+            })
+    except Exception as e:
+        print("❌ 台灣資料抓取失敗:", e)
+
+    # --- 印度資料（WAQI） ---
+    try:
+        TOKEN = "6fcc6c475513e44d1ab6a64e75491f6114ee7cd2"
+        city_list = [
+            {"city": "india/eloor/udyogamandal", "device_id": "Eloor Udyogamandal"},
+            {"city": "india/thiruvananthapuram/kariavattom", "device_id": "Kariavattom Thiruvananthapuram India"}
+        ]
+
+        for idx, item in enumerate(city_list):
+            if int(idx % total_shard) != int(shard_id):
+                continue
+
+            city = item["city"]
+            device_id = item["device_id"]
+            url = f"https://api.waqi.info/feed/{city}/?token={TOKEN}"
+            response = requests.get(url)
+            data = response.json()
+
+            if data["status"] == "ok":
+                d = data["data"]
+                iaqi = d.get("iaqi", {})
+                geo = d.get("city", {}).get("geo", [None, None])
+
+                records.append({
+                    "device_id": str(device_id),
+                    "time": str(d.get("time", {}).get("s", "")),
+                    "longitude": str(geo[1]),
+                    "latitude": str(geo[0]),
+                    "aqi": str(d.get("aqi", "")),
+                    "pm2_5": str(iaqi.get("pm25", {}).get("v", "")),
+                    "pm10": str(iaqi.get("pm10", {}).get("v", "")),
+                    "o3": str(iaqi.get("o3", {}).get("v", "")),
+                    "co": str(iaqi.get("co", {}).get("v", "")),
+                    "so2": str(iaqi.get("so2", {}).get("v", "")),
+                    "no2": str(iaqi.get("no2", {}).get("v", ""))
+                })
+            else:
+                print(f"❌ WAQI 資料抓取失敗：{device_id}")
+    except Exception as e:
+        print("❌ 印度資料抓取失敗:", e)
+
     return {"status": "ok", "value": records}
 
 # ✅ 建立 DAG 的函數
