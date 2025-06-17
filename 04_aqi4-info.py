@@ -1,21 +1,20 @@
 import os
 import sys
-sys.path.insert(0,os.path.abspath(os.path.dirname(__file__)))
+sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
 import json
 import requests
-
 from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.models.param import Param
-from airflow.models import Variable
 from airflow.operators.python import PythonOperator
 from airflow.utils.dates import days_ago
+
 from dags.factory import DagFactory
 from operators.postgres import PostgresOp
 from lib.requests import debug_requests
 
-# ✅ 新的 DAG ID，避免與 03.py 重複
+# ✅ DAG ID
 DAG_ID = "get_moenv_aqi_info_v2"
 
 # ✅ 抓取資料邏輯
@@ -99,6 +98,7 @@ def get_moenv_aqi_info_op(shard_id: int = 0, total_shard: int = 1):
 
     return {"status": "ok", "value": records}
 
+
 # ✅ 建立 DAG 的函數
 def get_aqi_info_dag():
     with DagFactory(
@@ -121,6 +121,15 @@ def get_aqi_info_dag():
 
         # 建立資料表
         createtabletask = pop.create_table("sql/aqi4_info_schema.sql")
+
+        # 刪除 N 天前的舊資料（例如保留 3 天）
+        delete_old_task = pop.execute_sql_task(
+        sql="""
+            DELETE FROM aqi4_info
+            WHERE time < NOW() - INTERVAL '3 days';
+        """,
+        task_id="delete_old_data"
+)
 
         # 抓資料
         gettask = PythonOperator(
@@ -145,7 +154,7 @@ def get_aqi_info_dag():
         insertdata = pop.bulk_insert_from_stmt(tmpfile)
 
         # DAG 流程串接
-        createtabletask >> gettask >> generatesql >> insertdata
+        createtabletask >> delete_old_task >> gettask >> generatesql >> insertdata
 
     return dag
 
