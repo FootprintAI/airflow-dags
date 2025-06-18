@@ -160,7 +160,6 @@ def get_aqi_info_dag():
 
 globals()[DAG_ID] = get_aqi_info_dag()
 
-    return dag
 
 # ✅ 註冊 DAG 給 Airflow 載入
 
