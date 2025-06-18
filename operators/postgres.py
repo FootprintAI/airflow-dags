@@ -75,3 +75,11 @@ class PostgresOp:
             postgres_conn_id="postgres_default",
             sql="SELECT * FROM {};".format(table_name),
         )
+
+    def execute_sql_task(self, sql: str, task_id: str):
+        return PostgresOperator(
+            task_id=task_id,
+            postgres_conn_id=self.postgres_conn_id,
+            sql=sql,
+            dag=self.dag,
+        )
