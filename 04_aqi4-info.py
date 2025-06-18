@@ -164,5 +164,3 @@ globals()[DAG_ID] = get_aqi_info_dag()
 
 # ✅ 註冊 DAG 給 Airflow 載入
 
-globals()[DAG_ID] = get_aqi_info_dag()
-
