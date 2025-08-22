@@ -7,6 +7,9 @@ import requests
 from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.models.param import Param
+
+from airflow.models import Variable
+
 from airflow.operators.python import PythonOperator
 from airflow.utils.dates import days_ago
 
@@ -14,7 +17,8 @@ from dags.factory import DagFactory
 from operators.postgres import PostgresOp
 from lib.requests import debug_requests
 
-# ✅ DAG ID
+
+# ✅ 新的 DAG ID，避免與 03.py 重複
 DAG_ID = "get_moenv_aqi_info_v2"
 
 # ✅ 抓取資料邏輯
@@ -124,12 +128,13 @@ def get_aqi_info_dag():
 
         # 刪除 N 天前的舊資料（例如保留 3 天）
         delete_old_task = pop.execute_sql_task(
-        sql="""
-            DELETE FROM aqi4_info
-            WHERE time < NOW() - INTERVAL '3 days';
-        """,
-        task_id="delete_old_data"
-)
+
+            sql="""
+                DELETE FROM aqi4_info
+                WHERE time < NOW() - INTERVAL '3 days';
+            """,
+            task_id="delete_old_data"
+        )
 
         # 抓資料
         gettask = PythonOperator(
@@ -150,13 +155,19 @@ def get_aqi_info_dag():
             on_conflict_key="device_id"
         )
 
-        # 執行 SQL 寫入
+
+        # 寫入資料
         insertdata = pop.bulk_insert_from_stmt(tmpfile)
 
-        # DAG 流程串接
+
         createtabletask >> delete_old_task >> gettask >> generatesql >> insertdata
 
     return dag
 
-# ✅ 註冊 DAG 給 Airflow 載入
+
 globals()[DAG_ID] = get_aqi_info_dag()
+
+
+# ✅ 註冊 DAG 給 Airflow 載入
+
+
